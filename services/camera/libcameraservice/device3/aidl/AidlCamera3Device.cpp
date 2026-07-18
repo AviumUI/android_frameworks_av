@@ -947,10 +947,20 @@ status_t AidlCamera3Device::AidlHalInterface::configureStreams(
         dst.height = src->height;
         dst.usage = mapToAidlConsumerUsage(cam3stream->getUsage());
         dst.rotation = mapToAidlStreamRotation((camera_stream_rotation_t) src->rotation);
-        dst.format = mapToAidlPixelFormat(cam3stream->isFormatOverridden() ?
-                    cam3stream->getOriginalFormat() : src->format);
-        dst.dataSpace = mapToAidlDataspace(cam3stream->isDataSpaceOverridden() ?
-                    cam3stream->getOriginalDataSpace() : src->data_space);
+        const int32_t halFormat = cam3stream->isFormatOverridden() ?
+                cam3stream->getOriginalFormat() : src->format;
+        dst.format = mapToAidlPixelFormat(halFormat);
+        android_dataspace halDataSpace = cam3stream->isDataSpaceOverridden() ?
+                cam3stream->getOriginalDataSpace() : src->data_space;
+        // Some legacy Qualcomm CHI implementations advertise JPEG_R support, but their
+        // P010 feature-graph descriptors only match HAL_DATASPACE_UNKNOWN. Keep the HLG10
+        // dynamic-range profile intact and only relax the redundant dataspace passed to HAL.
+        if (android::base::GetProperty("ro.product.device", "") == "ishtar" &&
+                halFormat == HAL_PIXEL_FORMAT_YCBCR_P010 &&
+                src->dynamic_range_profile == ANDROID_REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES_MAP_HLG10) {
+            halDataSpace = HAL_DATASPACE_UNKNOWN;
+        }
+        dst.dataSpace = mapToAidlDataspace(halDataSpace);
         dst.colorSpace = src->color_space;
 
         dst.bufferSize = bufferSizes[i];
